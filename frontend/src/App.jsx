@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2 } from 'lucide-react'
+import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2, Trash2, MessageSquare, Plus, FileText, Menu, X } from 'lucide-react'
 import { supabase } from './supabase'
 
 const initialGreetings = [
@@ -19,10 +19,15 @@ const footerJokes = [
 ]
 
 export default function App() {
-  // Auth State
+  // Auth & Layout State
   const [session, setSession] = useState(null)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
   
-  // Chat State
+  // Sidebar Data State
+  const [chatList, setChatList] = useState([])
+  const [fileList, setFileList] = useState([])
+  
+  // Active Chat State
   const [messages, setMessages] = useState(() => [
     { role: 'assistant', content: initialGreetings[Math.floor(Math.random() * initialGreetings.length)] }
   ])
@@ -34,38 +39,79 @@ export default function App() {
   
   const chatEndRef = useRef(null)
 
-  // 1. Listen for Google Login/Logout events
+  // 1. Auth Listener
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session))
     return () => subscription.unsubscribe()
   }, [])
 
-  // Auto-scroll to the newest message
+  // 2. Load Sidebar Data when Session exists
+  useEffect(() => {
+    if (session) {
+      fetchSidebarData()
+    }
+  }, [session])
+
+  // Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
 
-  // Auth Functions
-  const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ 
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin
+  const fetchSidebarData = async () => {
+    try {
+      const email = session.user.email
+      const [chatsRes, filesRes] = await Promise.all([
+        fetch(`https://goofy-vucm.onrender.com/user_chats?user_email=${email}`),
+        fetch(`https://goofy-vucm.onrender.com/user_files?user_email=${email}`)
+      ])
+      const chatsData = await chatsRes.json()
+      const filesData = await filesRes.json()
+      
+      setChatList(chatsData.chats || [])
+      setFileList(filesData.files || [])
+    } catch (error) {
+      console.error("Failed to load sidebar data", error)
+    }
+  }
+
+  const handleNewChat = () => {
+    setChatId(null)
+    setMessages([{ role: 'assistant', content: "Fresh session! What are we studying now?" }])
+    if (window.innerWidth < 768) setSidebarOpen(false) // Close sidebar on mobile
+  }
+
+  const loadPreviousChat = async (id) => {
+    setChatId(id)
+    if (window.innerWidth < 768) setSidebarOpen(false)
+    try {
+      const res = await fetch(`https://goofy-vucm.onrender.com/chat_history/${id}`)
+      const data = await res.json()
+      if (data.messages) {
+        setMessages(data.messages)
       }
-    })
+    } catch (error) {
+      console.error("Failed to load chat", error)
+    }
   }
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const deleteChat = async (e, id) => {
+    e.stopPropagation() // Prevent loading the chat when clicking delete
+    if (!window.confirm("Delete this chat?")) return
+    
+    await fetch(`https://goofy-vucm.onrender.com/chat/${id}?user_email=${session.user.email}`, { method: 'DELETE' })
+    if (chatId === id) handleNewChat()
+    fetchSidebarData()
   }
 
+  const deleteFile = async (filename) => {
+    if (!window.confirm(`Delete ${filename} from your AI memory?`)) return
+    
+    await fetch(`https://goofy-vucm.onrender.com/file?filename=${encodeURIComponent(filename)}&user_email=${session.user.email}`, { method: 'DELETE' })
+    fetchSidebarData()
+  }
+
+  // Existing Upload and Chat Functions
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
     if (!file) return
@@ -80,18 +126,15 @@ export default function App() {
         method: 'POST',
         body: formData,
       })
-      
       if (response.ok) {
         setMessages(prev => [...prev, { role: 'assistant', content: `Got it! Successfully ingested ${file.name}. Bring on the questions.` }])
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Ugh, I choked on that file. Make sure it is a PDF or PPTX.' }])
+        fetchSidebarData() // Refresh file list
       }
     } catch (error) {
       console.error("Upload error:", error)
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Server connection failed. Is the backend running?' }])
     } finally {
       setIsUploading(false)
-      e.target.value = null // Reset file input
+      e.target.value = null 
     }
   }
 
@@ -109,27 +152,26 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_email: session.user.email, // Now uses the actual logged-in user's email!
+          user_email: session.user.email,
           message: userMsg,
           chat_id: chatId
         })
       })
 
       const data = await response.json()
-      
-      // Save the chat_id so the backend remembers the conversation history
-      if (data.chat_id) setChatId(data.chat_id)
-      
+      if (!chatId && data.chat_id) {
+        setChatId(data.chat_id)
+        fetchSidebarData() // Refresh chat list if it was a new chat
+      }
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
     } catch (error) {
       console.error("Chat error:", error)
-      setMessages(prev => [...prev, { role: 'assistant', content: 'My brain flatlined. Check the backend connection.' }])
     } finally {
       setIsTyping(false)
     }
   }
 
-  // If user is NOT logged in, show the Login Screen
+  // Login Screen
   if (!session) {
     return (
       <div className="min-h-screen bg-goofy-beige flex flex-col items-center justify-center p-4">
@@ -138,13 +180,10 @@ export default function App() {
             <Stethoscope size={40} className="text-goofy-beige" />
           </div>
           <h1 className="text-3xl font-bold text-goofy-darkgreen">Goofy AI</h1>
-          <p className="text-goofy-brown">Your caffeinated medical study assistant.</p>
-          
           <button 
-            onClick={signInWithGoogle}
-            className="w-full py-3 px-4 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+            onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin }})}
+            className="w-full py-3 px-4 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 flex justify-center gap-2"
           >
-            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
             Sign in with Google
           </button>
         </div>
@@ -152,100 +191,137 @@ export default function App() {
     )
   }
 
-  // If user IS logged in, show the Main App
+  // Main Split Layout
   return (
-    <div className="min-h-screen bg-medico-pattern flex flex-col items-center p-4 sm:p-8 font-sans text-goofy-brown">
+    <div className="h-screen flex bg-medico-pattern text-goofy-brown font-sans overflow-hidden">
       
-      {/* Header */}
-      <header className="w-full max-w-3xl flex items-center justify-between bg-goofy-darkgreen text-goofy-beige p-4 rounded-t-2xl shadow-lg border-b-4 border-goofy-brown">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-goofy-beige text-goofy-darkgreen rounded-full animate-caffeine-jitters">
-            <Stethoscope size={28} />
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} absolute md:relative z-20 w-72 h-full bg-goofy-darkgreen text-goofy-beige flex flex-col transition-transform duration-300 shadow-2xl`}>
+        
+        <div className="p-4 flex items-center justify-between border-b border-goofy-beige/10">
+          <div className="flex items-center gap-2">
+            <Stethoscope size={24} />
+            <span className="font-bold text-lg tracking-wide">Goofy AI</span>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-wide">Goofy AI</h1>
-            <p className="text-xs opacity-80">Your severely caffeinated study buddy</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={signOut}
-            className="text-xs font-semibold bg-goofy-brown/80 hover:bg-goofy-brown px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-          >
-            Sign Out
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden opacity-70 hover:opacity-100">
+            <X size={24} />
           </button>
-          <BrainCircuit size={32} className="opacity-50 hidden sm:block" />
         </div>
-      </header>
 
-      {/* Chat Window */}
-      <div className="w-full max-w-3xl flex-1 bg-white/90 backdrop-blur-sm border-x-2 border-goofy-brown/20 p-4 overflow-y-auto min-h-[60vh] flex flex-col gap-4 shadow-xl">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] p-3 rounded-2xl ${
-              msg.role === 'user' 
-                ? 'bg-goofy-lightgreen text-white rounded-br-none' 
-                : 'bg-goofy-beige border-2 border-goofy-brown/10 text-goofy-brown rounded-bl-none shadow-sm'
-            }`}>
-              <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+        <div className="p-4">
+          <button onClick={handleNewChat} className="w-full flex items-center gap-2 bg-goofy-beige/10 hover:bg-goofy-beige/20 text-goofy-beige px-4 py-3 rounded-xl transition-colors font-medium">
+            <Plus size={20} /> New Chat
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
+          
+          {/* Recent Chats */}
+          <div>
+            <h3 className="text-xs font-bold text-goofy-beige/50 uppercase tracking-wider mb-2">Recent Chats</h3>
+            <div className="space-y-1">
+              {chatList.map(chat => (
+                <div key={chat.id} onClick={() => loadPreviousChat(chat.id)} className={`group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${chatId === chat.id ? 'bg-goofy-beige/20' : 'hover:bg-goofy-beige/10'}`}>
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <MessageSquare size={16} className="opacity-70 flex-shrink-0" />
+                    <span className="text-sm truncate opacity-90">{chat.title}</span>
+                  </div>
+                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all p-1">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-        
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-goofy-beige border-2 border-goofy-brown/10 text-goofy-brown p-3 rounded-2xl rounded-bl-none shadow-sm flex gap-2 items-center">
-              <Loader2 size={18} className="animate-spin" />
-              <span className="text-sm">Synthesizing caffeine...</span>
+
+          {/* Uploaded Files */}
+          <div>
+            <h3 className="text-xs font-bold text-goofy-beige/50 uppercase tracking-wider mb-2">Memory Bank</h3>
+            <div className="space-y-1">
+              {fileList.map(file => (
+                <div key={file} className="group flex items-center justify-between p-2 rounded-lg hover:bg-goofy-beige/10 transition-colors">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <FileText size={16} className="opacity-70 flex-shrink-0" />
+                    <span className="text-xs truncate opacity-90">{file}</span>
+                  </div>
+                  <button onClick={() => deleteFile(file)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all p-1">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
-        )}
-        <div ref={chatEndRef} />
+        </div>
+
+        <div className="p-4 border-t border-goofy-beige/10 text-xs">
+          <button onClick={() => supabase.auth.signOut()} className="w-full text-center py-2 opacity-70 hover:opacity-100 transition-opacity">
+            Sign Out ({session.user.email})
+          </button>
+        </div>
       </div>
 
-      {/* Input Area */}
-      <form onSubmit={handleSend} className="w-full max-w-3xl bg-goofy-beige p-3 flex gap-2 rounded-b-2xl shadow-lg border-t-2 border-goofy-brown/20 relative">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full bg-white/40 backdrop-blur-sm relative w-full">
         
-        <label className={`cursor-pointer p-3 rounded-xl transition-colors flex items-center justify-center group relative ${
-          isUploading ? 'bg-goofy-lightgreen/50 cursor-not-allowed' : 'bg-goofy-darkgreen hover:bg-goofy-lightgreen'
-        } text-goofy-beige`}>
-          <input 
-            type="file" 
-            className="hidden" 
-            accept=".pdf,.pptx,.doc,.docx" 
-            onChange={handleFileUpload}
-            disabled={isUploading}
-          />
-          {isUploading ? <Loader2 size={24} className="animate-spin" /> : <Paperclip size={24} />}
-          <span className="absolute bottom-full mb-2 w-max bg-goofy-brown text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-            {isUploading ? 'Uploading...' : 'Upload PDF, PPTX, DOC (Max 50MB)'}
-          </span>
-        </label>
+        {/* Mobile Header */}
+        <div className="md:hidden flex items-center gap-4 p-4 bg-white/80 border-b border-goofy-brown/10">
+          <button onClick={() => setSidebarOpen(true)} className="text-goofy-darkgreen">
+            <Menu size={24} />
+          </button>
+          <h1 className="font-bold text-lg text-goofy-darkgreen">Goofy AI</h1>
+        </div>
 
-        <input 
-          type="text" 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask me about the Krebs Cycle (please don't)..." 
-          disabled={isTyping || isUploading}
-          className="flex-1 bg-white border-2 border-goofy-brown/20 rounded-xl px-4 py-2 focus:outline-none focus:border-goofy-lightgreen text-goofy-brown placeholder-goofy-brown/50 disabled:bg-gray-100"
-        />
+        {/* Chat Window */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
+          {messages.map((msg, idx) => (
+            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[90%] md:max-w-[75%] p-4 rounded-2xl ${
+                msg.role === 'user' 
+                  ? 'bg-goofy-lightgreen text-white rounded-br-none' 
+                  : 'bg-goofy-beige border border-goofy-brown/10 text-goofy-brown rounded-bl-none shadow-sm'
+              }`}>
+                <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              </div>
+            </div>
+          ))}
+          
+          {isTyping && (
+            <div className="flex justify-start">
+              <div className="bg-goofy-beige border border-goofy-brown/10 text-goofy-brown p-4 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
+                <Loader2 size={18} className="animate-spin" />
+                <span className="text-sm">Synthesizing caffeine...</span>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
 
-        <button 
-          type="submit" 
-          disabled={isTyping || isUploading || !input.trim()}
-          className="p-3 bg-goofy-brown text-white rounded-xl hover:bg-goofy-darkgreen transition-colors disabled:bg-goofy-brown/50 cursor-pointer"
-        >
-          <Send size={24} />
-        </button>
-      </form>
+        {/* Input Area */}
+        <div className="p-4 bg-white/80 border-t border-goofy-brown/10">
+          <form onSubmit={handleSend} className="max-w-4xl mx-auto flex gap-2">
+            <label className={`cursor-pointer p-3 rounded-xl transition-colors flex items-center justify-center group relative ${
+              isUploading ? 'bg-goofy-lightgreen/50 cursor-not-allowed' : 'bg-goofy-darkgreen hover:bg-goofy-lightgreen'
+            } text-goofy-beige flex-shrink-0`}>
+              <input type="file" className="hidden" accept=".pdf,.pptx,.doc,.docx" onChange={handleFileUpload} disabled={isUploading} />
+              {isUploading ? <Loader2 size={24} className="animate-spin" /> : <Paperclip size={24} />}
+            </label>
 
-      {/* Footer Joke */}
-      <div className="mt-4 text-goofy-brown/60 flex items-center gap-2 text-sm font-medium">
-        <Syringe size={16} />
-        <span>{footerJoke}</span>
+            <input 
+              type="text" value={input} onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask a medical question..." 
+              disabled={isTyping || isUploading}
+              className="flex-1 bg-white border-2 border-goofy-brown/10 rounded-xl px-4 py-2 focus:outline-none focus:border-goofy-lightgreen disabled:bg-gray-100"
+            />
+
+            <button type="submit" disabled={isTyping || isUploading || !input.trim()} className="p-3 bg-goofy-brown text-white rounded-xl hover:bg-goofy-darkgreen disabled:bg-goofy-brown/50 flex-shrink-0">
+              <Send size={24} />
+            </button>
+          </form>
+          <div className="text-center mt-2 text-xs text-goofy-brown/50 flex items-center justify-center gap-1">
+            <Syringe size={12} /> {footerJoke}
+          </div>
+        </div>
       </div>
-
     </div>
   )
 }

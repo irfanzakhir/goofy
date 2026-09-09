@@ -18,6 +18,9 @@ class ChatRequest(BaseModel):
     message: str
     chat_id: Optional[str] = None  # None if it's a brand new chat
 
+class DeleteRequest(BaseModel):
+    user_email: str
+
 # Load environment variables
 load_dotenv()
 
@@ -62,7 +65,6 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
 
 @app.post("/upload")
 async def upload_document(file: UploadFile = File(...), user_email: str = Form(...)):
-    # FIXED: Added .doc and .docx to the validation check!
     if not file.filename.lower().endswith(('.pdf', '.pptx', '.doc', '.docx')):
         raise HTTPException(status_code=400, detail="Only PDF, PPTX, and DOCX supported.")
     
@@ -139,10 +141,9 @@ async def chat_with_assistant(request: ChatRequest):
         "query_embedding": question_embedding,
         "match_threshold": 0.70, 
         "match_count": 5,
-        "p_user_email": request.user_email # FIXED: Filters search by user email
+        "p_user_email": request.user_email # Filters search by user email
     }).execute()
 
-    # FIXED: SQL doesn't return filename, so we map just the content safely
     context_text = "\n\n".join([f"Context: {doc['content']}" for doc in matching_docs.data])
 
     # 5. Retrieve Chat History
@@ -172,7 +173,7 @@ async def chat_with_assistant(request: ChatRequest):
     """
 
     chat_session = gemini_client.chats.create(
-        model="gemini-2.0-flash",  # FIXED: Ensures you don't get a 404 error
+        model="gemini-2.0-flash", 
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
         ),
@@ -192,5 +193,56 @@ async def chat_with_assistant(request: ChatRequest):
     return {
         "chat_id": chat_id,
         "response": response.text,
-        "sources": [] # Omitted since filename isn't returned by the RPC
+        "sources": [] 
     }
+
+@app.post("/clear_data")
+async def clear_user_data(request: DeleteRequest):
+    # 1. Delete all document vectors (This frees the 500MB DB limit)
+    supabase.table("documents").delete().eq("user_email", request.user_email).execute()
+    
+    # 2. Get user's chat IDs to delete associated messages
+    user_chats = supabase.table("chats").select("id").eq("user_email", request.user_email).execute()
+    chat_ids = [chat['id'] for chat in user_chats.data]
+    
+    if chat_ids:
+        supabase.table("messages").delete().in_("chat_id", chat_ids).execute()
+        
+    # 3. Delete the chat sessions
+    supabase.table("chats").delete().eq("user_email", request.user_email).execute()
+    
+    return {"message": "Storage reclaimed successfully."}
+
+# --- NEW GRANULAR ENDPOINTS FOR SIDEBAR ---
+
+@app.get("/user_chats")
+async def get_user_chats(user_email: str):
+    # Fetch chat IDs and titles, newest first
+    response = supabase.table("chats").select("id, title").eq("user_email", user_email).order("created_at", desc=True).execute()
+    return {"chats": response.data}
+
+@app.get("/chat_history/{chat_id}")
+async def get_chat_history(chat_id: str):
+    # Fetch previous messages for a specific chat
+    response = supabase.table("messages").select("role, content").eq("chat_id", chat_id).order("created_at").execute()
+    return {"messages": response.data}
+
+@app.delete("/chat/{chat_id}")
+async def delete_chat(chat_id: str, user_email: str):
+    # Delete messages first, then the chat session
+    supabase.table("messages").delete().eq("chat_id", chat_id).execute()
+    supabase.table("chats").delete().eq("id", chat_id).eq("user_email", user_email).execute()
+    return {"message": "Chat deleted"}
+
+@app.get("/user_files")
+async def get_user_files(user_email: str):
+    # Fetch all chunks, then use Python set() to get unique filenames
+    response = supabase.table("documents").select("filename").eq("user_email", user_email).execute()
+    filenames = list(set([doc['filename'] for doc in response.data]))
+    return {"files": filenames}
+
+@app.delete("/file")
+async def delete_file(filename: str, user_email: str):
+    # Delete all vector chunks associated with this specific file and user
+    supabase.table("documents").delete().eq("filename", filename).eq("user_email", user_email).execute()
+    return {"message": "File deleted"}
