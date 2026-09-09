@@ -26,7 +26,11 @@ app = FastAPI()
 # Allow the React/Vite frontend to communicate with this backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173", 
+        "http://127.0.0.1:5173",
+        "https://goofy-five.vercel.app" # <-- Add this line (NO trailing slash)
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
