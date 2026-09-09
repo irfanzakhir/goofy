@@ -177,7 +177,7 @@ export default function App() {
       <div className="min-h-screen bg-goofy-beige flex flex-col items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center space-y-6">
           <div className="bg-goofy-darkgreen w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Stethoscope size={40} className="text-goofy-beige" />
+            <Stethoscope size={40} className="animate-heartbeat" />
           </div>
           <h1 className="text-3xl font-bold text-goofy-darkgreen">Goofy AI</h1>
           <button 
@@ -261,7 +261,7 @@ export default function App() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col h-full bg-white/40 backdrop-blur-sm relative w-full">
+<div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#fcfbf9] via-[#f4ead2] to-[#fcfbf9] animate-bg-drift relative w-full">
         
         {/* Mobile Header */}
         <div className="md:hidden flex items-center gap-4 p-4 bg-white/80 border-b border-goofy-brown/10">

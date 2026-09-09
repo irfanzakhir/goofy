@@ -32,3 +32,24 @@
   background: var(--color-goofy-darkgreen);
   border-radius: 10px;
 }
+
+@layer utilities {
+  .animate-bg-drift {
+    background-size: 200% 200%;
+    animation: drift 15s ease infinite;
+  }
+  @keyframes drift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  .animate-heartbeat {
+    animation: heartbeat 2.5s ease-in-out infinite;
+  }
+  @keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    15%, 45% { transform: scale(1.15) rotate(-5deg); }
+    30% { transform: scale(1) rotate(0deg); }
+  }
+}
