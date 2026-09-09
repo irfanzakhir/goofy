@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  /* Earthy, Medico Vibe Palette */
+  --color-goofy-beige: #f4ecd8;
+  --color-goofy-brown: #5c4033;
+  --color-goofy-darkgreen: #2b4227;
+  --color-goofy-lightgreen: #4f7942;
+  
+  /* Bouncing animation for Goofy's avatar */
+  --animate-caffeine-jitters: caffeine-jitters 2s infinite;
+}
+
+@keyframes caffeine-jitters {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25% { transform: translateY(-3px) rotate(-2deg); }
+  75% { transform: translateY(3px) rotate(2deg); }
+}
+
+/* Fun pill-pattern background */
+.bg-medico-pattern {
+  background-color: var(--color-goofy-beige);
+  background-image: radial-gradient(var(--color-goofy-lightgreen) 1.5px, transparent 1.5px);
+  background-size: 25px 25px;
+}
+
+/* Custom Scrollbar for the chat */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-goofy-darkgreen);
+  border-radius: 10px;
+}
