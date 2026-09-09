@@ -73,6 +73,7 @@ export default function App() {
     setIsUploading(true)
     const formData = new FormData()
     formData.append('file', file)
+    formData.append('user_email', session.user.email)
 
     try {
       const response = await fetch('https://goofy-vucm.onrender.com/upload', {

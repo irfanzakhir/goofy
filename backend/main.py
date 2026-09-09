@@ -1,6 +1,6 @@
 import os
 import io
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import pymupdf  # PyMuPDF for PDFs
@@ -29,7 +29,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173", 
         "http://127.0.0.1:5173",
-        "https://goofy-five.vercel.app" # <-- Add this line (NO trailing slash)
+        "https://goofy-five.vercel.app" 
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -61,9 +61,10 @@ def extract_text_from_docx(file_bytes: bytes) -> str:
     return "\n".join([paragraph.text for paragraph in doc.paragraphs])
 
 @app.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
-    if not file.filename.endswith(('.pdf', '.pptx')):
-        raise HTTPException(status_code=400, detail="Only PDF and PPTX supported.")
+async def upload_document(file: UploadFile = File(...), user_email: str = Form(...)):
+    # FIXED: Added .doc and .docx to the validation check!
+    if not file.filename.lower().endswith(('.pdf', '.pptx', '.doc', '.docx')):
+        raise HTTPException(status_code=400, detail="Only PDF, PPTX, and DOCX supported.")
     
     file_bytes = await file.read()
     
@@ -96,7 +97,8 @@ async def upload_document(file: UploadFile = File(...)):
         records.append({
             "filename": file.filename,
             "content": chunk,
-            "embedding": result.embeddings[0].values
+            "embedding": result.embeddings[0].values,
+            "user_email": user_email  # Associates chunks with the logged-in user
         })
         
     # Push records to Supabase 'documents' table
@@ -133,14 +135,15 @@ async def chat_with_assistant(request: ChatRequest):
     question_embedding = result.embeddings[0].values
 
     # 4. Search the Supabase Vector Database (RAG)
-    # This calls the match_documents RPC function you created in SQL
     matching_docs = supabase.rpc("match_documents", {
         "query_embedding": question_embedding,
-        "match_threshold": 0.70, # Only retrieve highly relevant chunks
-        "match_count": 5
+        "match_threshold": 0.70, 
+        "match_count": 5,
+        "p_user_email": request.user_email # FIXED: Filters search by user email
     }).execute()
 
-    context_text = "\n\n".join([f"Source ({doc['filename']}): {doc['content']}" for doc in matching_docs.data])
+    # FIXED: SQL doesn't return filename, so we map just the content safely
+    context_text = "\n\n".join([f"Context: {doc['content']}" for doc in matching_docs.data])
 
     # 5. Retrieve Chat History
     history = supabase.table("messages")\
@@ -169,7 +172,7 @@ async def chat_with_assistant(request: ChatRequest):
     """
 
     chat_session = gemini_client.chats.create(
-        model="gemini-3.6-flash",  # Updated from gemini-1.5-flash
+        model="gemini-2.0-flash",  # FIXED: Ensures you don't get a 404 error
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
         ),
@@ -189,5 +192,5 @@ async def chat_with_assistant(request: ChatRequest):
     return {
         "chat_id": chat_id,
         "response": response.text,
-        "sources": [doc['filename'] for doc in matching_docs.data]
+        "sources": [] # Omitted since filename isn't returned by the RPC
     }
