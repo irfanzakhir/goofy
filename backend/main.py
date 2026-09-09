@@ -173,7 +173,7 @@ async def chat_with_assistant(request: ChatRequest):
     """
 
     chat_session = gemini_client.chats.create(
-        model="gemini-2.0-flash", 
+        model="gemini-3.6-flash", 
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
         ),
