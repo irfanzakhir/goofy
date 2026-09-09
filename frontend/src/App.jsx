@@ -300,7 +300,7 @@ export default function App() {
       <div ref={vantaRef} className="flex-1 flex flex-col h-full relative w-full overflow-hidden">
         
         {/* Transparent wrapper to keep chat content above the Vanta canvas */}
-        <div className="relative z-10 flex flex-col h-full w-full bg-white/40 backdrop-blur-sm">
+        <div className="relative z-10 flex flex-col h-full w-full bg-transparent">
           
           {/* Mobile Header */}
           <div className="md:hidden flex items-center gap-4 p-4 bg-white/80 border-b border-goofy-brown/10">
