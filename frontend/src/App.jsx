@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2 } from 'lucide-react'
+import { supabase } from './supabase'
 
 const initialGreetings = [
   "Sup Doc! I'm Goofy. Upload your 2,000-page Robbins Pathology PDF, and I'll pretend I read it.",
@@ -18,6 +19,10 @@ const footerJokes = [
 ]
 
 export default function App() {
+  // Auth State
+  const [session, setSession] = useState(null)
+  
+  // Chat State
   const [messages, setMessages] = useState(() => [
     { role: 'assistant', content: initialGreetings[Math.floor(Math.random() * initialGreetings.length)] }
   ])
@@ -29,10 +34,37 @@ export default function App() {
   
   const chatEndRef = useRef(null)
 
+  // 1. Listen for Google Login/Logout events
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
   // Auto-scroll to the newest message
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isTyping])
+
+  // Auth Functions
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ 
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    })
+  }
+
+  const signOut = async () => {
+    await supabase.auth.signOut()
+  }
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
@@ -76,7 +108,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_email: 'mbbs_friend@example.com', // Placeholder until Google Auth is added
+          user_email: session.user.email, // Now uses the actual logged-in user's email!
           message: userMsg,
           chat_id: chatId
         })
@@ -96,6 +128,30 @@ export default function App() {
     }
   }
 
+  // If user is NOT logged in, show the Login Screen
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-goofy-beige flex flex-col items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center space-y-6">
+          <div className="bg-goofy-darkgreen w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Stethoscope size={40} className="text-goofy-beige" />
+          </div>
+          <h1 className="text-3xl font-bold text-goofy-darkgreen">Goofy AI</h1>
+          <p className="text-goofy-brown">Your caffeinated medical study assistant.</p>
+          
+          <button 
+            onClick={signInWithGoogle}
+            className="w-full py-3 px-4 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2 transition-colors cursor-pointer shadow-sm"
+          >
+            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+            Sign in with Google
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // If user IS logged in, show the Main App
   return (
     <div className="min-h-screen bg-medico-pattern flex flex-col items-center p-4 sm:p-8 font-sans text-goofy-brown">
       
@@ -110,7 +166,15 @@ export default function App() {
             <p className="text-xs opacity-80">Your severely caffeinated study buddy</p>
           </div>
         </div>
-        <BrainCircuit size={32} className="opacity-50" />
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={signOut}
+            className="text-xs font-semibold bg-goofy-brown/80 hover:bg-goofy-brown px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+          >
+            Sign Out
+          </button>
+          <BrainCircuit size={32} className="opacity-50 hidden sm:block" />
+        </div>
       </header>
 
       {/* Chat Window */}
@@ -152,7 +216,7 @@ export default function App() {
             disabled={isUploading}
           />
           {isUploading ? <Loader2 size={24} className="animate-spin" /> : <Paperclip size={24} />}
-          <span className="absolute bottom-full mb-2 w-max bg-goofy-brown text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+          <span className="absolute bottom-full mb-2 w-max bg-goofy-brown text-white text-xs p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
             {isUploading ? 'Uploading...' : 'Upload PDF, PPTX, DOC (Max 50MB)'}
           </span>
         </label>
@@ -169,7 +233,7 @@ export default function App() {
         <button 
           type="submit" 
           disabled={isTyping || isUploading || !input.trim()}
-          className="p-3 bg-goofy-brown text-white rounded-xl hover:bg-goofy-darkgreen transition-colors disabled:bg-goofy-brown/50"
+          className="p-3 bg-goofy-brown text-white rounded-xl hover:bg-goofy-darkgreen transition-colors disabled:bg-goofy-brown/50 cursor-pointer"
         >
           <Send size={24} />
         </button>
