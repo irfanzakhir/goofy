@@ -1,10 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2, Trash2, MessageSquare, Plus, FileText, Menu, X } from 'lucide-react'
 import { supabase } from './supabase'
-import * as THREE from 'three'
-window.THREE = THREE
-// @ts-ignore
-import DOTS from 'vanta/src/vanta.dots'
+
 
 
 
@@ -33,12 +30,11 @@ export default function App() {
   const [vantaEffect, setVantaEffect] = useState(null)
 
   useEffect(() => {
-    // Only initialize if the user is logged in and the panel exists
-    if (session && !vantaEffect && vantaRef.current) {
+    // Check for window.VANTA to ensure the script has loaded
+    if (session && !vantaEffect && vantaRef.current && window.VANTA) {
       setVantaEffect(
-        DOTS({
+        window.VANTA.DOTS({
           el: vantaRef.current,
-          THREE: THREE, // Crucial for React integration
           mouseControls: true,
           touchControls: true,
           gyroControls: false,
@@ -55,7 +51,6 @@ export default function App() {
       )
     }
     
-    // Cleanup function to destroy the animation when navigating away
     return () => {
       if (vantaEffect) {
         vantaEffect.destroy()
