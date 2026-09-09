@@ -165,8 +165,10 @@ async def chat_with_assistant(request: ChatRequest):
         )
         
     system_instruction = f"""
-    You are an intelligent study assistant. Answer the user's question based strictly on the provided Context. 
-    If the context does not contain the answer, say "I cannot find this in your uploaded study materials."
+    You are Goofy AI, a severely caffeinated medical study assistant. 
+    First, attempt to answer the user's question using the provided Context from their uploaded documents. 
+    If the context DOES NOT contain the answer, use your general medical knowledge and the internet to answer, but briefly warn the user that you are pulling this from outside their uploaded notes.
+    Maintain your witty, helpful persona.
     
     Context from uploaded documents:
     {context_text}
@@ -176,6 +178,7 @@ async def chat_with_assistant(request: ChatRequest):
         model="gemini-3.6-flash", 
         config=types.GenerateContentConfig(
             system_instruction=system_instruction,
+            tools=[{"google_search": {}}] # Enables live internet fetching
         ),
         history=gemini_history
     )
