@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2, Trash2, MessageSquare, Plus, FileText, Menu, X } from 'lucide-react'
 import { supabase } from './supabase'
+import * as THREE from 'three'
+import DOTS from 'vanta/dist/vanta.dots.min'
 
 const initialGreetings = [
   "Sup Doc! I'm Goofy. Upload your 2,000-page Robbins Pathology PDF, and I'll pretend I read it.",
@@ -22,6 +24,41 @@ export default function App() {
   // Auth & Layout State
   const [session, setSession] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+
+  const vantaRef = useRef(null)
+  const [vantaEffect, setVantaEffect] = useState(null)
+
+  useEffect(() => {
+    // Only initialize if the user is logged in and the panel exists
+    if (session && !vantaEffect && vantaRef.current) {
+      setVantaEffect(
+        DOTS({
+          el: vantaRef.current,
+          THREE: THREE, // Crucial for React integration
+          mouseControls: true,
+          touchControls: true,
+          gyroControls: false,
+          minHeight: 200.00,
+          minWidth: 200.00,
+          scale: 1.00,
+          scaleMobile: 1.00,
+          color: 0x559030,
+          color2: 0x2d580b,
+          backgroundColor: 0xdecc6a,
+          size: 5.30,
+          spacing: 37.00
+        })
+      )
+    }
+    
+    // Cleanup function to destroy the animation when navigating away
+    return () => {
+      if (vantaEffect) {
+        vantaEffect.destroy()
+        setVantaEffect(null)
+      }
+    }
+  }, [session, vantaEffect])
   
   // Sidebar Data State
   const [chatList, setChatList] = useState([])
@@ -182,7 +219,7 @@ export default function App() {
           <h1 className="text-3xl font-bold text-goofy-darkgreen">Goofy AI</h1>
           <button 
             onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin }})}
-            className="w-full py-3 px-4 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 flex justify-center gap-2"
+            className="w-full py-3 px-4 bg-white border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 flex justify-center gap-2 cursor-pointer transition-colors"
           >
             Sign in with Google
           </button>
@@ -203,13 +240,13 @@ export default function App() {
             <Stethoscope size={24} />
             <span className="font-bold text-lg tracking-wide">Goofy AI</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="md:hidden opacity-70 hover:opacity-100">
+          <button onClick={() => setSidebarOpen(false)} className="md:hidden opacity-70 hover:opacity-100 cursor-pointer">
             <X size={24} />
           </button>
         </div>
 
         <div className="p-4">
-          <button onClick={handleNewChat} className="w-full flex items-center gap-2 bg-goofy-beige/10 hover:bg-goofy-beige/20 text-goofy-beige px-4 py-3 rounded-xl transition-colors font-medium">
+          <button onClick={handleNewChat} className="w-full flex items-center gap-2 bg-goofy-beige/10 hover:bg-goofy-beige/20 text-goofy-beige px-4 py-3 rounded-xl transition-colors font-medium cursor-pointer">
             <Plus size={20} /> New Chat
           </button>
         </div>
@@ -226,7 +263,7 @@ export default function App() {
                     <MessageSquare size={16} className="opacity-70 flex-shrink-0" />
                     <span className="text-sm truncate opacity-90">{chat.title}</span>
                   </div>
-                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all p-1">
+                  <button onClick={(e) => deleteChat(e, chat.id)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all p-1 cursor-pointer">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -244,7 +281,7 @@ export default function App() {
                     <FileText size={16} className="opacity-70 flex-shrink-0" />
                     <span className="text-xs truncate opacity-90">{file}</span>
                   </div>
-                  <button onClick={() => deleteFile(file)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all p-1">
+                  <button onClick={() => deleteFile(file)} className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all p-1 cursor-pointer">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -254,72 +291,77 @@ export default function App() {
         </div>
 
         <div className="p-4 border-t border-goofy-beige/10 text-xs">
-          <button onClick={() => supabase.auth.signOut()} className="w-full text-center py-2 opacity-70 hover:opacity-100 transition-opacity">
+          <button onClick={() => supabase.auth.signOut()} className="w-full text-center py-2 opacity-70 hover:opacity-100 transition-opacity cursor-pointer">
             Sign Out ({session.user.email})
           </button>
         </div>
       </div>
 
-      {/* Main Chat Area */}
-<div className="flex-1 flex flex-col h-full bg-gradient-to-br from-[#fcfbf9] via-[#f4ead2] to-[#fcfbf9] animate-bg-drift relative w-full">
+      {/* Main Chat Area (Vanta Target) */}
+      <div ref={vantaRef} className="flex-1 flex flex-col h-full relative w-full overflow-hidden">
         
-        {/* Mobile Header */}
-        <div className="md:hidden flex items-center gap-4 p-4 bg-white/80 border-b border-goofy-brown/10">
-          <button onClick={() => setSidebarOpen(true)} className="text-goofy-darkgreen">
-            <Menu size={24} />
-          </button>
-          <h1 className="font-bold text-lg text-goofy-darkgreen">Goofy AI</h1>
-        </div>
-
-        {/* Chat Window */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[90%] md:max-w-[75%] p-4 rounded-2xl ${
-                msg.role === 'user' 
-                  ? 'bg-goofy-lightgreen text-white rounded-br-none' 
-                  : 'bg-goofy-beige border border-goofy-brown/10 text-goofy-brown rounded-bl-none shadow-sm'
-              }`}>
-                <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-              </div>
-            </div>
-          ))}
+        {/* Transparent wrapper to keep chat content above the Vanta canvas */}
+        <div className="relative z-10 flex flex-col h-full w-full bg-white/40 backdrop-blur-sm">
           
-          {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-goofy-beige border border-goofy-brown/10 text-goofy-brown p-4 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
-                <Loader2 size={18} className="animate-spin" />
-                <span className="text-sm">Synthesizing caffeine...</span>
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Input Area */}
-        <div className="p-4 bg-white/80 border-t border-goofy-brown/10">
-          <form onSubmit={handleSend} className="max-w-4xl mx-auto flex gap-2">
-            <label className={`cursor-pointer p-3 rounded-xl transition-colors flex items-center justify-center group relative ${
-              isUploading ? 'bg-goofy-lightgreen/50 cursor-not-allowed' : 'bg-goofy-darkgreen hover:bg-goofy-lightgreen'
-            } text-goofy-beige flex-shrink-0`}>
-              <input type="file" className="hidden" accept=".pdf,.pptx,.doc,.docx" onChange={handleFileUpload} disabled={isUploading} />
-              {isUploading ? <Loader2 size={24} className="animate-spin" /> : <Paperclip size={24} />}
-            </label>
-
-            <input 
-              type="text" value={input} onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask a medical question..." 
-              disabled={isTyping || isUploading}
-              className="flex-1 bg-white border-2 border-goofy-brown/10 rounded-xl px-4 py-2 focus:outline-none focus:border-goofy-lightgreen disabled:bg-gray-100"
-            />
-
-            <button type="submit" disabled={isTyping || isUploading || !input.trim()} className="p-3 bg-goofy-brown text-white rounded-xl hover:bg-goofy-darkgreen disabled:bg-goofy-brown/50 flex-shrink-0">
-              <Send size={24} />
+          {/* Mobile Header */}
+          <div className="md:hidden flex items-center gap-4 p-4 bg-white/80 border-b border-goofy-brown/10">
+            <button onClick={() => setSidebarOpen(true)} className="text-goofy-darkgreen cursor-pointer">
+              <Menu size={24} />
             </button>
-          </form>
-          <div className="text-center mt-2 text-xs text-goofy-brown/50 flex items-center justify-center gap-1">
-            <Syringe size={12} /> {footerJoke}
+            <h1 className="font-bold text-lg text-goofy-darkgreen">Goofy AI</h1>
           </div>
+
+          {/* Chat Window */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-4">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[90%] md:max-w-[75%] p-4 rounded-2xl ${
+                  msg.role === 'user' 
+                    ? 'bg-goofy-lightgreen text-white rounded-br-none' 
+                    : 'bg-white/90 border border-goofy-brown/10 text-goofy-brown rounded-bl-none shadow-sm'
+                }`}>
+                  <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                </div>
+              </div>
+            ))}
+            
+            {isTyping && (
+              <div className="flex justify-start">
+                <div className="bg-white/90 border border-goofy-brown/10 text-goofy-brown p-4 rounded-2xl rounded-bl-none shadow-sm flex items-center gap-2">
+                  <Loader2 size={18} className="animate-spin" />
+                  <span className="text-sm">Synthesizing caffeine...</span>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className="p-4 bg-white/80 border-t border-goofy-brown/10">
+            <form onSubmit={handleSend} className="max-w-4xl mx-auto flex gap-2">
+              <label className={`cursor-pointer p-3 rounded-xl transition-colors flex items-center justify-center group relative ${
+                isUploading ? 'bg-goofy-lightgreen/50 cursor-not-allowed' : 'bg-goofy-darkgreen hover:bg-goofy-lightgreen'
+              } text-goofy-beige flex-shrink-0`}>
+                <input type="file" className="hidden" accept=".pdf,.pptx,.doc,.docx" onChange={handleFileUpload} disabled={isUploading} />
+                {isUploading ? <Loader2 size={24} className="animate-spin" /> : <Paperclip size={24} />}
+              </label>
+
+              <input 
+                type="text" value={input} onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a medical question..." 
+                disabled={isTyping || isUploading}
+                className="flex-1 bg-white border-2 border-goofy-brown/10 rounded-xl px-4 py-2 focus:outline-none focus:border-goofy-lightgreen disabled:bg-gray-100"
+              />
+
+              <button type="submit" disabled={isTyping || isUploading || !input.trim()} className="p-3 bg-goofy-brown text-white rounded-xl hover:bg-goofy-darkgreen disabled:bg-goofy-brown/50 flex-shrink-0 cursor-pointer">
+                <Send size={24} />
+              </button>
+            </form>
+            <div className="text-center mt-2 text-xs text-goofy-brown/50 flex items-center justify-center gap-1">
+              <Syringe size={12} /> {footerJoke}
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
