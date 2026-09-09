@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react'
 import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2, Trash2, MessageSquare, Plus, FileText, Menu, X } from 'lucide-react'
 import { supabase } from './supabase'
 import * as THREE from 'three'
-import DOTS from 'vanta/dist/vanta.dots.min'
+window.THREE = THREE
+// @ts-ignore
+import DOTS from 'vanta/src/vanta.dots'
+
+
 
 const initialGreetings = [
   "Sup Doc! I'm Goofy. Upload your 2,000-page Robbins Pathology PDF, and I'll pretend I read it.",
