@@ -1,8 +1,10 @@
 fastapi
 uvicorn[standard]
+python-multipart
+python-dotenv
 supabase
 google-genai
-python-multipart
-python-docx
+PyMuPDF
 python-pptx
-pymupdf
+python-docx
+langchain-text-splitters
