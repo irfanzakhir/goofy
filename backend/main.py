@@ -178,7 +178,7 @@ async def chat_with_assistant(request: ChatRequest):
     # 7. Generate Chat with Groq
     chat_completion = groq_client.chat.completions.create(
         messages=groq_messages,
-        model="llama-3.1-8b-instant",
+        model="llama-3.1-8b-8192",
     )
     
     response_text = chat_completion.choices[0].message.content
