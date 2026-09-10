@@ -9,6 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from supabase import create_client, Client
 from google import genai
 from google.genai import types
+from groq import Groq
 from pydantic import BaseModel
 from typing import Optional
 import docx
@@ -39,12 +40,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Supabase and Gemini Clients
+# Initialize Supabase, Gemini (for embeddings), and Groq (for chat)
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"), 
     os.getenv("SUPABASE_SERVICE_KEY")
 )
 gemini_client = genai.Client()
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
     doc = pymupdf.open(stream=file_bytes, filetype="pdf")
@@ -154,16 +156,6 @@ async def chat_with_assistant(request: ChatRequest):
         .limit(10)\
         .execute()
 
-    # 6. Construct the Gemini Prompt
-    gemini_history = []
-    for msg in history.data[:-1]: 
-        gemini_history.append(
-            types.Content(
-                role="model" if msg['role'] == "assistant" else "user",
-                parts=[types.Part.from_text(text=msg['content'])]
-            )
-        )
-        
     system_instruction = f"""
     You are Goofy AI, a severely caffeinated medical study assistant. 
     First, attempt to answer the user's question using the provided Context from their uploaded documents. 
@@ -174,28 +166,33 @@ async def chat_with_assistant(request: ChatRequest):
     {context_text}
     """
 
-    chat_session = gemini_client.chats.create(
-        model="gemini-3.6-flash", 
-        config=types.GenerateContentConfig(
-            system_instruction=system_instruction,
-            tools=[{"google_search": {}}] # Enables live internet fetching
-        ),
-        history=gemini_history
+    # 6. Construct the Groq Prompt
+    groq_messages = [{"role": "system", "content": system_instruction}]
+    for msg in history.data[:-1]: 
+        groq_messages.append({
+            "role": msg['role'],
+            "content": msg['content']
+        })
+    groq_messages.append({"role": "user", "content": request.message})
+
+    # 7. Generate Chat with Groq
+    chat_completion = groq_client.chat.completions.create(
+        messages=groq_messages,
+        model="llama-3.1-8b-instant",
     )
     
-    # Send the newest message
-    response = chat_session.send_message(request.message)
+    response_text = chat_completion.choices[0].message.content
 
-    # 7. Save Assistant Message to Memory
+    # 8. Save Assistant Message to Memory
     supabase.table("messages").insert({
         "chat_id": chat_id,
         "role": "assistant",
-        "content": response.text
+        "content": response_text
     }).execute()
 
     return {
         "chat_id": chat_id,
-        "response": response.text,
+        "response": response_text,
         "sources": [] 
     }
 

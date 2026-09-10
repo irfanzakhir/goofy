@@ -2,9 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2, Trash2, MessageSquare, Plus, FileText, Menu, X } from 'lucide-react'
 import { supabase } from './supabase'
 
-
-
-
 const initialGreetings = [
   "Sup Doc! I'm Goofy. Upload your 2,000-page Robbins Pathology PDF, and I'll pretend I read it.",
   "Welcome back. I’ve had 6 shots of espresso and I'm ready to hallucinate some anatomy facts.",
@@ -30,7 +27,7 @@ export default function App() {
   const [vantaEffect, setVantaEffect] = useState(null)
 
   useEffect(() => {
-    // Check for window.VANTA to ensure the script has loaded
+    // Check for window.VANTA to ensure the CDN script has loaded
     if (session && !vantaEffect && vantaRef.current && window.VANTA) {
       setVantaEffect(
         window.VANTA.DOTS({
@@ -114,7 +111,7 @@ export default function App() {
   const handleNewChat = () => {
     setChatId(null)
     setMessages([{ role: 'assistant', content: "Fresh session! What are we studying now?" }])
-    if (window.innerWidth < 768) setSidebarOpen(false) // Close sidebar on mobile
+    if (window.innerWidth < 768) setSidebarOpen(false) 
   }
 
   const loadPreviousChat = async (id) => {
@@ -132,7 +129,7 @@ export default function App() {
   }
 
   const deleteChat = async (e, id) => {
-    e.stopPropagation() // Prevent loading the chat when clicking delete
+    e.stopPropagation() 
     if (!window.confirm("Delete this chat?")) return
     
     await fetch(`https://goofy-vucm.onrender.com/chat/${id}?user_email=${session.user.email}`, { method: 'DELETE' })
@@ -164,7 +161,7 @@ export default function App() {
       })
       if (response.ok) {
         setMessages(prev => [...prev, { role: 'assistant', content: `Got it! Successfully ingested ${file.name}. Bring on the questions.` }])
-        fetchSidebarData() // Refresh file list
+        fetchSidebarData() 
       }
     } catch (error) {
       console.error("Upload error:", error)
@@ -197,7 +194,7 @@ export default function App() {
       const data = await response.json()
       if (!chatId && data.chat_id) {
         setChatId(data.chat_id)
-        fetchSidebarData() // Refresh chat list if it was a new chat
+        fetchSidebarData() 
       }
       setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
     } catch (error) {
