@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Stethoscope, Syringe, Send, Paperclip, BrainCircuit, Loader2, Trash2, MessageSquare, Plus, FileText, Menu, X } from 'lucide-react'
+import Markdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { supabase } from './supabase'
 
 const initialGreetings = [
@@ -316,7 +318,11 @@ export default function App() {
                     ? 'bg-goofy-lightgreen text-white rounded-br-none' 
                     : 'bg-white/90 border border-goofy-brown/10 text-goofy-brown rounded-bl-none shadow-sm'
                 }`}>
-                  <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <div className="prose prose-sm md:prose-base max-w-none text-current">
+                    <Markdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </Markdown>
+                  </div>
                 </div>
               </div>
             ))}
