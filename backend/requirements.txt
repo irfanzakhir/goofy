@@ -9,3 +9,4 @@ python-pptx
 python-docx
 langchain-text-splitters
 groq
+openai
